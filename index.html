@@ -167,6 +167,63 @@
     padding:0;
   }
 
+  .photo-grid{
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .photo-grid .thumb{
+    position:relative;
+    aspect-ratio: 1;
+    border-radius: 6px;
+    overflow:hidden;
+    border: 1px solid var(--line);
+  }
+  .photo-grid .thumb img{
+    width:100%;
+    height:100%;
+    object-fit: cover;
+    display:block;
+  }
+  .photo-grid .thumb button{
+    position:absolute;
+    top:3px;
+    right:3px;
+    width:20px;
+    height:20px;
+    border-radius:50%;
+    border:none;
+    background: rgba(20,22,26,0.75);
+    color:#fff;
+    font-size:12px;
+    line-height:1;
+    cursor:pointer;
+  }
+  .add-photo-btn{
+    width:100%;
+    margin-top: 10px;
+    background: var(--surface-raised);
+    border: 1.5px dashed var(--line);
+    color: var(--muted);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 13px;
+    font-family:'Inter', sans-serif;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+  }
+  .add-photo-btn:hover{ border-color: var(--accent); color: var(--text); }
+  .photo-count{
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 8px;
+    text-align:right;
+  }
+
   .save-btn{
     width:100%;
     margin-top: 26px;
@@ -262,16 +319,15 @@
       <input type="text" id="customerNumber" placeholder="e.g. C-2291" inputmode="text">
 
       <div class="photo-zone">
-        <label style="margin-top:0;">Order photo</label>
+        <label style="margin-top:0;">Order photos</label>
         <button type="button" class="photo-btn" id="photoBtn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.4"/></svg>
-          Tap to take photo
+          Tap to take a photo
         </button>
         <input type="file" id="photoInput" accept="image/*" capture="environment">
-        <div class="preview-wrap" id="previewWrap">
-          <img id="previewImg" alt="Order photo preview">
-          <button type="button" class="retake" id="retakeBtn">Retake photo</button>
-        </div>
+        <div class="photo-grid" id="photoGrid"></div>
+        <button type="button" class="add-photo-btn" id="addPhotoBtn" style="display:none;">+ Add another photo</button>
+        <div class="photo-count" id="photoCount"></div>
       </div>
 
       <button class="save-btn" id="saveBtn" disabled>Save to Drive</button>
@@ -280,11 +336,11 @@
       <div class="ticket" id="ticket" style="display:none;">
         <div class="tick">✓ Saved to Drive</div>
         <dl>
-          <dt>Order</dt><dd id="ticketOrder"></dd><br>
           <dt>Customer</dt><dd id="ticketCustomer"></dd><br>
-          <dt>File</dt><dd id="ticketFile"></dd>
+          <dt>Order</dt><dd id="ticketOrder"></dd><br>
+          <dt>Photos</dt><dd id="ticketFile"></dd>
         </dl>
-        <br><a id="ticketLink" href="#" target="_blank" rel="noopener">Open in Drive →</a>
+        <br><a id="ticketLink" href="#" target="_blank" rel="noopener">Open folder in Drive →</a>
       </div>
       <button class="log-another" id="logAnotherBtn" style="display:none;">Log another order</button>
     </div>
@@ -298,12 +354,16 @@ const CONFIG = {
   ALLOWED_DOMAIN: 'bladetrader.co.za',
   DRIVE_FOLDER_ID: '1d5OUyAdrXaSHNQDcfyq2ecvTNaTIrE3l'
 };
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file openid email profile';
+// Using full drive scope (not drive.file) so that the Year/Customer/Order
+// folders created by one employee are visible and writable by every other
+// signed-in employee. Safe here because this app's OAuth client is set to
+// "Internal" — Google does not require verification for internal Workspace apps.
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive openid email profile';
 // ================================================================
 
 let tokenClient = null;
 let accessToken = null;
-let photoFile = null;
+let photoFiles = []; // array of File objects, one per captured photo
 
 const els = {
   signinView: document.getElementById('signinView'),
@@ -317,9 +377,9 @@ const els = {
   customerNumber: document.getElementById('customerNumber'),
   photoBtn: document.getElementById('photoBtn'),
   photoInput: document.getElementById('photoInput'),
-  previewWrap: document.getElementById('previewWrap'),
-  previewImg: document.getElementById('previewImg'),
-  retakeBtn: document.getElementById('retakeBtn'),
+  photoGrid: document.getElementById('photoGrid'),
+  addPhotoBtn: document.getElementById('addPhotoBtn'),
+  photoCount: document.getElementById('photoCount'),
   saveBtn: document.getElementById('saveBtn'),
   saveStatus: document.getElementById('saveStatus'),
   ticket: document.getElementById('ticket'),
@@ -336,7 +396,7 @@ function showView(name){
 }
 
 function checkFormValid(){
-  const ok = !!photoFile && els.orderNumber.value.trim() !== '' && els.customerNumber.value.trim() !== '';
+  const ok = photoFiles.length > 0 && els.orderNumber.value.trim() !== '' && els.customerNumber.value.trim() !== '';
   els.saveBtn.disabled = !ok;
 }
 
@@ -390,27 +450,49 @@ els.signOutBtn.addEventListener('click', () => {
   showView('signin');
 });
 
-// ---------- Photo capture ----------
-els.photoBtn.addEventListener('click', () => els.photoInput.click());
+// ---------- Photo capture (multiple) ----------
+function openCamera(){
+  els.photoInput.value = ''; // reset so the same "shot" always fires a change event
+  els.photoInput.click();
+}
+
+els.photoBtn.addEventListener('click', openCamera);
+els.addPhotoBtn.addEventListener('click', openCamera);
 
 els.photoInput.addEventListener('change', () => {
   const file = els.photoInput.files[0];
   if (!file) return;
-  photoFile = file;
-  const url = URL.createObjectURL(file);
-  els.previewImg.src = url;
-  els.previewWrap.classList.add('visible');
-  els.photoBtn.style.display = 'none';
+  photoFiles.push(file);
+  renderPhotoGrid();
   checkFormValid();
 });
 
-els.retakeBtn.addEventListener('click', () => {
-  photoFile = null;
-  els.photoInput.value = '';
-  els.previewWrap.classList.remove('visible');
-  els.photoBtn.style.display = 'flex';
-  checkFormValid();
-});
+function renderPhotoGrid(){
+  els.photoGrid.innerHTML = '';
+  photoFiles.forEach((file, index) => {
+    const thumb = document.createElement('div');
+    thumb.className = 'thumb';
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(file);
+    img.alt = 'Order photo ' + (index + 1);
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.textContent = '✕';
+    removeBtn.addEventListener('click', () => {
+      photoFiles.splice(index, 1);
+      renderPhotoGrid();
+      checkFormValid();
+    });
+    thumb.appendChild(img);
+    thumb.appendChild(removeBtn);
+    els.photoGrid.appendChild(thumb);
+  });
+
+  const count = photoFiles.length;
+  els.photoBtn.style.display = count === 0 ? 'flex' : 'none';
+  els.addPhotoBtn.style.display = count === 0 ? 'none' : 'flex';
+  els.photoCount.textContent = count === 0 ? '' : count + ' photo' + (count === 1 ? '' : 's') + ' added';
+}
 
 els.orderNumber.addEventListener('input', checkFormValid);
 els.customerNumber.addEventListener('input', checkFormValid);
@@ -424,6 +506,79 @@ function timestamp(){
   return new Date().toISOString().replace(/[:.]/g, '-');
 }
 
+function uploadWithXHR(url, form, token){
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+    xhr.onload = () => {
+      if (xhr.status === 401){
+        reject(new Error('Your sign-in expired. Please sign out and back in, then try again.'));
+        return;
+      }
+      if (xhr.status >= 200 && xhr.status < 300){
+        try{
+          resolve(JSON.parse(xhr.responseText));
+        } catch(e){
+          reject(new Error('Drive returned an unexpected response.'));
+        }
+      } else {
+        reject(new Error('Drive upload failed (status ' + xhr.status + ').'));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Network error during upload — check your connection and try again.'));
+    xhr.ontimeout = () => reject(new Error('Upload timed out — check your connection and try again.'));
+    xhr.timeout = 30000;
+    xhr.send(form);
+  });
+}
+
+function driveJSON(method, url, token, bodyObj){
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url);
+    xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+    if (bodyObj) xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = () => {
+      if (xhr.status === 401){
+        reject(new Error('Your sign-in expired. Please sign out and back in, then try again.'));
+        return;
+      }
+      if (xhr.status >= 200 && xhr.status < 300){
+        try{ resolve(xhr.responseText ? JSON.parse(xhr.responseText) : {}); }
+        catch(e){ reject(new Error('Drive returned an unexpected response.')); }
+      } else {
+        reject(new Error('Drive request failed (status ' + xhr.status + ').'));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Network error — check your connection and try again.'));
+    xhr.ontimeout = () => reject(new Error('Request timed out — check your connection and try again.'));
+    xhr.timeout = 20000;
+    xhr.send(bodyObj ? JSON.stringify(bodyObj) : null);
+  });
+}
+
+// Finds a folder with this exact name inside parentId, or creates it if missing.
+async function getOrCreateFolder(name, parentId, token){
+  const escaped = name.replace(/'/g, "\\'");
+  const q = `mimeType='application/vnd.google-apps.folder' and name='${escaped}' and '${parentId}' in parents and trashed=false`;
+  const listUrl = 'https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(q) + '&fields=files(id,name)&spaces=drive';
+  const listRes = await driveJSON('GET', listUrl, token);
+  if (listRes.files && listRes.files.length > 0){
+    return listRes.files[0].id;
+  }
+  const createRes = await driveJSON('POST', 'https://www.googleapis.com/drive/v3/files', token, {
+    name: name,
+    mimeType: 'application/vnd.google-apps.folder',
+    parents: [parentId]
+  });
+  return createRes.id;
+}
+
+function sanitizeFolderName(str){
+  return str.trim().replace(/[\/\\]/g, '-');
+}
+
 els.saveBtn.addEventListener('click', async () => {
   if (CONFIG.DRIVE_FOLDER_ID === 'PASTE_YOUR_DRIVE_FOLDER_ID_HERE'){
     els.saveStatus.className = 'status error';
@@ -431,40 +586,41 @@ els.saveBtn.addEventListener('click', async () => {
     return;
   }
 
-  const order = sanitize(els.orderNumber.value);
-  const customer = sanitize(els.customerNumber.value);
-  const filename = `Order-${order}_Customer-${customer}_${timestamp()}.jpg`;
+  const orderRaw = els.orderNumber.value.trim();
+  const customerRaw = els.customerNumber.value.trim();
+  const order = sanitizeFolderName(orderRaw);
+  const customer = sanitizeFolderName(customerRaw);
+  const year = String(new Date().getFullYear());
 
   els.saveBtn.disabled = true;
-  els.saveStatus.className = 'status info';
-  els.saveStatus.textContent = 'Uploading to Drive…';
 
   try{
-    const metadata = { name: filename, parents: [CONFIG.DRIVE_FOLDER_ID] };
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file', photoFile);
+    els.saveStatus.className = 'status info';
+    els.saveStatus.textContent = 'Setting up folders…';
+    const yearFolderId = await getOrCreateFolder(year, CONFIG.DRIVE_FOLDER_ID, accessToken);
+    const customerFolderId = await getOrCreateFolder(customer, yearFolderId, accessToken);
+    const orderFolderId = await getOrCreateFolder(order, customerFolderId, accessToken);
 
-    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + accessToken },
-      body: form
-    });
+    for (let i = 0; i < photoFiles.length; i++){
+      els.saveStatus.textContent = `Uploading photo ${i + 1} of ${photoFiles.length}…`;
+      const filename = `Order-${order}_Customer-${customer}_${i + 1}_${timestamp()}.jpg`;
+      const metadata = { name: filename, parents: [orderFolderId] };
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      form.append('file', photoFiles[i]);
 
-    if (res.status === 401){
-      throw new Error('Your sign-in expired. Please sign out and back in, then try again.');
+      await uploadWithXHR(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink',
+        form,
+        accessToken
+      );
     }
-    if (!res.ok){
-      const errBody = await res.text();
-      throw new Error('Drive upload failed (' + res.status + ').');
-    }
 
-    const data = await res.json();
     els.saveStatus.textContent = '';
-    els.ticketOrder.textContent = els.orderNumber.value.trim();
-    els.ticketCustomer.textContent = els.customerNumber.value.trim();
-    els.ticketFile.textContent = filename;
-    els.ticketLink.href = data.webViewLink || '#';
+    els.ticketOrder.textContent = orderRaw;
+    els.ticketCustomer.textContent = customerRaw;
+    els.ticketFile.textContent = photoFiles.length + (photoFiles.length === 1 ? ' photo saved' : ' photos saved');
+    els.ticketLink.href = 'https://drive.google.com/drive/folders/' + orderFolderId;
     els.ticket.style.display = 'block';
     els.logAnotherBtn.style.display = 'block';
     els.saveBtn.style.display = 'none';
@@ -481,10 +637,9 @@ els.logAnotherBtn.addEventListener('click', resetForm);
 function resetForm(){
   els.orderNumber.value = '';
   els.customerNumber.value = '';
-  photoFile = null;
+  photoFiles = [];
   els.photoInput.value = '';
-  els.previewWrap.classList.remove('visible');
-  els.photoBtn.style.display = 'flex';
+  renderPhotoGrid();
   els.ticket.style.display = 'none';
   els.logAnotherBtn.style.display = 'none';
   els.saveBtn.style.display = 'block';
