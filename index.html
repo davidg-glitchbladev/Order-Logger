@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Order Logger — BladeTrader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&family=Roboto+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root{
+    --bg: #1C1F26;
+    --surface: #242933;
+    --surface-raised: #2C323D;
+    --line: #3A4150;
+    --text: #EDEFF2;
+    --muted: #8C94A3;
+    --accent: #5B9BC4;
+    --accent-dim: #3E6E8E;
+    --success: #4CAF77;
+    --error: #E2574C;
+    --radius: 10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    padding: 24px 16px;
+  }
+  .card{
+    width:100%;
+    max-width: 440px;
+  }
+  header{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    margin-bottom: 20px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand{
+    font-family:'Barlow Condensed', sans-serif;
+    font-weight:700;
+    font-size: 26px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .brand span{ color: var(--accent); }
+  .user-chip{
+    font-size: 12px;
+    color: var(--muted);
+    display:none;
+    align-items:center;
+    gap:8px;
+  }
+  .user-chip.visible{ display:flex; }
+  .user-chip button{
+    background:none;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    cursor:pointer;
+  }
+  .user-chip button:hover{ border-color: var(--accent); color: var(--text); }
+
+  .view{ display:none; }
+  .view.active{ display:block; animation: fadein .25s ease; }
+  @keyframes fadein{ from{opacity:0; transform: translateY(4px);} to{opacity:1; transform:none;} }
+
+  .panel{
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 28px 22px;
+  }
+  .panel p.lead{
+    color: var(--muted);
+    font-size: 14px;
+    line-height:1.5;
+    margin: 0 0 22px 0;
+  }
+  .gbtn{
+    width:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    background: #fff;
+    color: #1f1f1f;
+    border:none;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 15px;
+    font-weight: 600;
+    font-family:'Inter', sans-serif;
+    cursor:pointer;
+  }
+  .gbtn:hover{ background:#f2f2f2; }
+  .gbtn svg{ width:18px; height:18px; }
+
+  label{
+    display:block;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    margin-top: 18px;
+  }
+  label:first-of-type{ margin-top:0; }
+  input[type=text], input[type=number]{
+    width:100%;
+    background: var(--surface-raised);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-family:'Roboto Mono', monospace;
+    font-size: 16px;
+    padding: 12px 12px;
+    border-radius: 8px;
+  }
+  input:focus{ outline:2px solid var(--accent); outline-offset:1px; }
+
+  .photo-zone{
+    margin-top: 18px;
+  }
+  .photo-btn{
+    width:100%;
+    background: var(--surface-raised);
+    border: 1.5px dashed var(--line);
+    color: var(--muted);
+    border-radius: 8px;
+    padding: 22px 12px;
+    font-size: 14px;
+    font-family:'Inter', sans-serif;
+    cursor:pointer;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+  }
+  .photo-btn:hover{ border-color: var(--accent); color: var(--text); }
+  .photo-btn svg{ width:26px; height:26px; opacity:0.8; }
+  #photoInput{ display:none; }
+  .preview-wrap{ position:relative; margin-top:18px; display:none; }
+  .preview-wrap.visible{ display:block; }
+  .preview-wrap img{
+    width:100%;
+    border-radius: 8px;
+    border:1px solid var(--line);
+    display:block;
+  }
+  .retake{
+    margin-top:8px;
+    background:none;
+    border:none;
+    color: var(--accent);
+    font-size: 13px;
+    cursor:pointer;
+    padding:0;
+  }
+
+  .save-btn{
+    width:100%;
+    margin-top: 26px;
+    background: var(--accent);
+    color: #10151b;
+    border:none;
+    border-radius: 8px;
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    font-family:'Inter', sans-serif;
+    cursor:pointer;
+  }
+  .save-btn:disabled{
+    background: var(--surface-raised);
+    color: var(--muted);
+    cursor:not-allowed;
+  }
+  .save-btn:not(:disabled):hover{ background: var(--accent-dim); }
+
+  .status{
+    margin-top: 14px;
+    font-size: 13px;
+    text-align:center;
+    min-height: 18px;
+  }
+  .status.error{ color: var(--error); }
+  .status.info{ color: var(--muted); }
+
+  /* Ticket-style confirmation */
+  .ticket{
+    background: var(--surface-raised);
+    border-radius: 8px;
+    padding: 20px 18px;
+    margin-top: 20px;
+    position:relative;
+    clip-path: polygon(
+      0% 4px, 4px 0%, calc(100% - 4px) 0%, 100% 4px,
+      100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0% calc(100% - 4px)
+    );
+    border-top: 2px dashed var(--success);
+  }
+  .ticket .tick{ color: var(--success); font-size: 13px; font-weight:600; margin-bottom:10px; }
+  .ticket dl{ margin:0; font-family:'Roboto Mono', monospace; font-size:13px; }
+  .ticket dt{ color: var(--muted); display:inline-block; width: 100px; }
+  .ticket dd{ display:inline; margin:0; }
+  .ticket a{ color: var(--accent); font-size: 12px; }
+
+  .log-another{
+    width:100%;
+    margin-top: 16px;
+    background:none;
+    border:1px solid var(--line);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 14px;
+    cursor:pointer;
+  }
+  .log-another:hover{ border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <header>
+    <div class="brand">Order <span>Logger</span></div>
+    <div class="user-chip" id="userChip">
+      <span id="userEmail"></span>
+      <button id="signOutBtn">Sign out</button>
+    </div>
+  </header>
+
+  <!-- SIGN IN VIEW -->
+  <div class="view active" id="signinView">
+    <div class="panel">
+      <p class="lead">Sign in with your BladeTrader Google account to start logging orders.</p>
+      <button class="gbtn" id="signInBtn">
+        <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.9 32.4 29.4 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.1 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.6 18.9 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.1 29.5 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.3 0 10.1-2 13.7-5.4l-6.3-5.2C29.4 35.4 26.8 36 24 36c-5.3 0-9.9-3.6-11.5-8.5l-6.5 5C9.5 39.5 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-1.1 3-3.4 5.4-6.4 6.8l6.3 5.2C38.7 37.5 44 31.5 44 24c0-1.3-.1-2.7-.4-3.5z"/></svg>
+        Sign in with Google
+      </button>
+      <div class="status error" id="signinStatus"></div>
+    </div>
+  </div>
+
+  <!-- APP VIEW -->
+  <div class="view" id="appView">
+    <div class="panel">
+      <label>Order number</label>
+      <input type="text" id="orderNumber" placeholder="e.g. 10432" inputmode="numeric">
+
+      <label>Customer number</label>
+      <input type="text" id="customerNumber" placeholder="e.g. C-2291" inputmode="text">
+
+      <div class="photo-zone">
+        <label style="margin-top:0;">Order photo</label>
+        <button type="button" class="photo-btn" id="photoBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.4"/></svg>
+          Tap to take photo
+        </button>
+        <input type="file" id="photoInput" accept="image/*" capture="environment">
+        <div class="preview-wrap" id="previewWrap">
+          <img id="previewImg" alt="Order photo preview">
+          <button type="button" class="retake" id="retakeBtn">Retake photo</button>
+        </div>
+      </div>
+
+      <button class="save-btn" id="saveBtn" disabled>Save to Drive</button>
+      <div class="status" id="saveStatus"></div>
+
+      <div class="ticket" id="ticket" style="display:none;">
+        <div class="tick">✓ Saved to Drive</div>
+        <dl>
+          <dt>Order</dt><dd id="ticketOrder"></dd><br>
+          <dt>Customer</dt><dd id="ticketCustomer"></dd><br>
+          <dt>File</dt><dd id="ticketFile"></dd>
+        </dl>
+        <br><a id="ticketLink" href="#" target="_blank" rel="noopener">Open in Drive →</a>
+      </div>
+      <button class="log-another" id="logAnotherBtn" style="display:none;">Log another order</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ====== CONFIG — edit these three values for your setup ======
+const CONFIG = {
+  CLIENT_ID: '303486803168-ffci7uk9dnopl5upp05fdejkdir7r64p.apps.googleusercontent.com',
+  ALLOWED_DOMAIN: 'bladetrader.co.za',
+  DRIVE_FOLDER_ID: '1d5OUyAdrXaSHNQDcfyq2ecvTNaTIrE3l'
+};
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file openid email profile';
+// ================================================================
+
+let tokenClient = null;
+let accessToken = null;
+let photoFile = null;
+
+const els = {
+  signinView: document.getElementById('signinView'),
+  appView: document.getElementById('appView'),
+  signInBtn: document.getElementById('signInBtn'),
+  signOutBtn: document.getElementById('signOutBtn'),
+  signinStatus: document.getElementById('signinStatus'),
+  userChip: document.getElementById('userChip'),
+  userEmail: document.getElementById('userEmail'),
+  orderNumber: document.getElementById('orderNumber'),
+  customerNumber: document.getElementById('customerNumber'),
+  photoBtn: document.getElementById('photoBtn'),
+  photoInput: document.getElementById('photoInput'),
+  previewWrap: document.getElementById('previewWrap'),
+  previewImg: document.getElementById('previewImg'),
+  retakeBtn: document.getElementById('retakeBtn'),
+  saveBtn: document.getElementById('saveBtn'),
+  saveStatus: document.getElementById('saveStatus'),
+  ticket: document.getElementById('ticket'),
+  ticketOrder: document.getElementById('ticketOrder'),
+  ticketCustomer: document.getElementById('ticketCustomer'),
+  ticketFile: document.getElementById('ticketFile'),
+  ticketLink: document.getElementById('ticketLink'),
+  logAnotherBtn: document.getElementById('logAnotherBtn'),
+};
+
+function showView(name){
+  els.signinView.classList.toggle('active', name === 'signin');
+  els.appView.classList.toggle('active', name === 'app');
+}
+
+function checkFormValid(){
+  const ok = !!photoFile && els.orderNumber.value.trim() !== '' && els.customerNumber.value.trim() !== '';
+  els.saveBtn.disabled = !ok;
+}
+
+// ---------- Google Sign-In ----------
+window.onload = () => {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CONFIG.CLIENT_ID,
+    scope: DRIVE_SCOPE,
+    callback: async (resp) => {
+      if (resp.error){
+        els.signinStatus.textContent = 'Sign-in failed: ' + resp.error;
+        return;
+      }
+      accessToken = resp.access_token;
+      await afterSignIn();
+    }
+  });
+};
+
+els.signInBtn.addEventListener('click', () => {
+  els.signinStatus.textContent = '';
+  tokenClient.requestAccessToken({ prompt: 'select_account' });
+});
+
+async function afterSignIn(){
+  try{
+    const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: 'Bearer ' + accessToken }
+    });
+    const info = await r.json();
+    if (!info.email || !info.email.endsWith('@' + CONFIG.ALLOWED_DOMAIN)){
+      els.signinStatus.textContent = 'This app is only for @' + CONFIG.ALLOWED_DOMAIN + ' accounts.';
+      accessToken = null;
+      return;
+    }
+    els.userEmail.textContent = info.email;
+    els.userChip.classList.add('visible');
+    showView('app');
+  } catch(e){
+    els.signinStatus.textContent = 'Could not verify sign-in. Please try again.';
+  }
+}
+
+els.signOutBtn.addEventListener('click', () => {
+  if (accessToken){
+    google.accounts.oauth2.revoke(accessToken, () => {});
+  }
+  accessToken = null;
+  els.userChip.classList.remove('visible');
+  resetForm();
+  showView('signin');
+});
+
+// ---------- Photo capture ----------
+els.photoBtn.addEventListener('click', () => els.photoInput.click());
+
+els.photoInput.addEventListener('change', () => {
+  const file = els.photoInput.files[0];
+  if (!file) return;
+  photoFile = file;
+  const url = URL.createObjectURL(file);
+  els.previewImg.src = url;
+  els.previewWrap.classList.add('visible');
+  els.photoBtn.style.display = 'none';
+  checkFormValid();
+});
+
+els.retakeBtn.addEventListener('click', () => {
+  photoFile = null;
+  els.photoInput.value = '';
+  els.previewWrap.classList.remove('visible');
+  els.photoBtn.style.display = 'flex';
+  checkFormValid();
+});
+
+els.orderNumber.addEventListener('input', checkFormValid);
+els.customerNumber.addEventListener('input', checkFormValid);
+
+// ---------- Save to Drive ----------
+function sanitize(str){
+  return str.trim().replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
+function timestamp(){
+  return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+els.saveBtn.addEventListener('click', async () => {
+  if (CONFIG.DRIVE_FOLDER_ID === 'PASTE_YOUR_DRIVE_FOLDER_ID_HERE'){
+    els.saveStatus.className = 'status error';
+    els.saveStatus.textContent = 'App is not fully configured yet — missing Drive folder ID.';
+    return;
+  }
+
+  const order = sanitize(els.orderNumber.value);
+  const customer = sanitize(els.customerNumber.value);
+  const filename = `Order-${order}_Customer-${customer}_${timestamp()}.jpg`;
+
+  els.saveBtn.disabled = true;
+  els.saveStatus.className = 'status info';
+  els.saveStatus.textContent = 'Uploading to Drive…';
+
+  try{
+    const metadata = { name: filename, parents: [CONFIG.DRIVE_FOLDER_ID] };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', photoFile);
+
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + accessToken },
+      body: form
+    });
+
+    if (res.status === 401){
+      throw new Error('Your sign-in expired. Please sign out and back in, then try again.');
+    }
+    if (!res.ok){
+      const errBody = await res.text();
+      throw new Error('Drive upload failed (' + res.status + ').');
+    }
+
+    const data = await res.json();
+    els.saveStatus.textContent = '';
+    els.ticketOrder.textContent = els.orderNumber.value.trim();
+    els.ticketCustomer.textContent = els.customerNumber.value.trim();
+    els.ticketFile.textContent = filename;
+    els.ticketLink.href = data.webViewLink || '#';
+    els.ticket.style.display = 'block';
+    els.logAnotherBtn.style.display = 'block';
+    els.saveBtn.style.display = 'none';
+
+  } catch(e){
+    els.saveStatus.className = 'status error';
+    els.saveStatus.textContent = e.message || 'Something went wrong. Please try again.';
+    els.saveBtn.disabled = false;
+  }
+});
+
+els.logAnotherBtn.addEventListener('click', resetForm);
+
+function resetForm(){
+  els.orderNumber.value = '';
+  els.customerNumber.value = '';
+  photoFile = null;
+  els.photoInput.value = '';
+  els.previewWrap.classList.remove('visible');
+  els.photoBtn.style.display = 'flex';
+  els.ticket.style.display = 'none';
+  els.logAnotherBtn.style.display = 'none';
+  els.saveBtn.style.display = 'block';
+  els.saveBtn.disabled = true;
+  els.saveStatus.textContent = '';
+}
+</script>
+</body>
+</html>
